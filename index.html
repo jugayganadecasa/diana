@@ -17,7 +17,6 @@ t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window, document,'script',
 'https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '1631102585339520');
-fbq('init', '1631102585339520');
 fbq('track', 'PageView');
 </script>
 <noscript><img height="1" width="1" style="display:none"
@@ -528,87 +527,27 @@ src="https://www.facebook.com/tr?id=1631102585339520&ev=PageView&noscript=1"
             throw new Error(`Error HTTP: ${response.status}`);
         }
         return response.json();
-    }    // Función para enviar evento a Facebook Conversions API - Actualizada con nuevo Pixel ID
+    }    // Registro de conversión en el navegador.
+    // "Lead" representa el clic en el botón de WhatsApp;
+    // no confirma que la persona haya enviado un mensaje.
     function enviarEventoFacebook() {
-        try {
-            // Generar un ID único para este evento específico
-            const eventId = generateEventId();
-            console.log('🔍 Generando evento con ID:', eventId);
-            
-            // Registrar el evento Lead con el pixel estándar
-            fbq('track', 'Lead', {
-                value: 1.00,
-                currency: 'USD'
-            }, {eventID: eventId}); // Usamos eventID para deduplicación
-            console.log('✅ Evento Lead enviado al Pixel de Facebook con ID:', eventId);
+        return new Promise((resolve) => {
+            try {
+                if (typeof fbq === 'function') {
+                    fbq('track', 'Lead', {
+                        value: 1.00,
+                        currency: 'USD'
+                    });
 
-            // Obtener fbp y fbc de cookies o localStorage con mejor fallback
-            const fbp = getCookie('_fbp') || '';
-            const fbc = getCookie('_fbc') || 
-                      getCookie('fbclid') || 
-                      new URL(window.location.href).searchParams.get('fbclid') || '';
-              // Obtener URL completa para event_source_url
-            const eventSourceUrl = window.location.href;              // Token de acceso actualizado para el nuevo Pixel ID
-            // Token actualizado para el Pixel ID 1631102585339520
-            const ACCESS_TOKEN = 'EAAR7uPgFvj8BO2WoA8r9ZCZCtL70WDOs7OaLNQAuxNFCSewnN52LbA43EGBhF0vkAUSHy0A0WGZAgIB8gD6ZAZCEQjAJmZBBZA17DK5tadY0Wf8GnhZAS2maQZAC35qgvyzTBtsbZBFUYFen8Wfphy6gsOQMG7jDOMvV9x25oZBlVi1YyJmnp7YAfamrndzvktgPgZDZD';
-              // Modo de prueba - Este código debe coincidir con el que usamos en el archivo .env
-            const TEST_MODE = false; // Cambiar a true para pruebas
-            const TEST_EVENT_CODE = 'TEST1332'; // Código correcto para pruebas
-            
-            // Preparar datos para el endpoint de conversiones
-            const eventData = {
-                fbp: fbp,
-                fbc: fbc,
-                event_id: eventId, // El mismo ID usado en fbq para deduplicación
-                event_name: "Lead", // Cambiado a "Lead" para coincidir con el pixel
-                event_source_url: eventSourceUrl,
-                user_agent: navigator.userAgent,
-                event_time: Math.floor(Date.now() / 1000),
-                value: 1.00,
-                currency: 'USD',
-                access_token: ACCESS_TOKEN
-            };
-            
-            // Añadir test_event_code solo si estamos en modo prueba
-            if (TEST_MODE) {
-                eventData.test_event_code = TEST_EVENT_CODE;
+                    // Evento adicional para diferenciar específicamente el clic.
+                    fbq('trackCustom', 'WhatsAppClick');
+                }
+                resolve(true);
+            } catch (error) {
+                console.error('Error al registrar el evento de Meta:', error);
+                resolve(false);
             }
-            
-            console.log('📤 Enviando datos a API de conversiones:', eventData);
-            
-            // Enviar evento a través de la ruta específica para Facebook Conversion API
-            return fetch('/api/facebook-conversion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventData)
-            })
-            .then(checkResponse)
-            .then(data => {
-                console.log('✅ Evento de conversión registrado:', data);
-                
-                // También enviamos al endpoint general para mantener compatibilidad
-                return fetch('/api/sendEvent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        eventName: 'Contactar', // Usar "Contactar" también aquí
-                        eventData: eventData
-                    })
-                });
-            })
-            .then(checkResponse)
-            .then(data => {
-                console.log('✅ Evento general registrado:', data);
-                return true; // Indicar éxito
-            })
-            .catch(error => {
-                console.error('❌ Error al registrar evento:', error);
-                return false; // Indicar error
-            });
-        } catch (e) {
-            console.error('❌ Error inesperado:', e);
-            return Promise.resolve(false);
-        }
+        });
     }
 
     // Función para manejar el envío del formulario
@@ -643,34 +582,25 @@ src="https://www.facebook.com/tr?id=1631102585339520&ev=PageView&noscript=1"
         
         if (whatsappBtn) {
             console.log('🔍 Botón de WhatsApp encontrado, configurando eventos');
-            
             whatsappBtn.addEventListener('click', function(event) {
-                event.preventDefault();
-                
-                const userName = document.getElementById('user-name').value.trim();
-                if (!userName) {
-                    document.getElementById('user-name').focus();
+                const userNameInput = document.getElementById('user-name');
+                const userName = userNameInput ? userNameInput.value.trim() : '';
+
+                if (userNameInput && !userName) {
+                    event.preventDefault();
+                    userNameInput.focus();
                     return;
                 }
-                
-                // Guardar el nombre
-                localStorage.setItem('userName', userName);
-                
+
+                if (userName) {
+                    localStorage.setItem('userName', userName);
+                }
+
                 console.log('🖱️ Clic detectado en botón de WhatsApp');
-                
-                // Enviar el evento a Facebook y manejar la navegación
-                enviarEventoFacebook()
-                    .then(success => {
-                        console.log(`⏱️ Esperando antes de abrir enlace (estado: ${success ? 'éxito' : 'error'})`);
-                        
-                        // Navegar al enlace después de un breve retraso
-                        setTimeout(() => {
-                            console.log('➡️ Abriendo enlace...');
-                            window.open(this.href, '_blank');
-                        }, 300);
-                    });
-            });
-            
+
+                // Registrar el clic sin bloquear la navegación a WhatsApp.
+                enviarEventoFacebook();
+            }); 
             // Efecto de feedback táctil al presionar el botón en móviles
             whatsappBtn.addEventListener('touchstart', function() {
                 this.style.transform = 'scale(0.98)';
